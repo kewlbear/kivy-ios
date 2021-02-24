@@ -40,7 +40,7 @@ class Python3Recipe(Recipe):
 
     def postbuild_arch(self, arch):
         # include _sqlite module to .a
-        py_arch = arch.arch
+        py_arch = arch.arch_arg()
         if py_arch == "armv7":
             py_arch = "arm"
         elif py_arch == "arm64":
@@ -75,7 +75,7 @@ class Python3Recipe(Recipe):
     def build_arch(self, arch):
         build_env = self.get_build_env(arch)
         configure = sh.Command(join(self.build_dir, "configure"))
-        py_arch = arch.arch
+        py_arch = arch.arch_arg()
         if py_arch == "armv7":
             py_arch = "arm"
         elif py_arch == "arm64":

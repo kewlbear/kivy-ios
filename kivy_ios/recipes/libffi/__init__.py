@@ -8,9 +8,9 @@ class LibffiRecipe(Recipe):
     url = "https://sourceware.org/pub/libffi/libffi-{version}.tar.gz"
     library = "build/Release-{arch.sdk}/libffi.a"
     include_per_arch = True
-    include_dir = "build_{arch.sdk}-{arch.arch}/include"
+    include_dir = "build_{arch.sdk}-{arch_arg}/include"
     include_name = "ffi"
-    archs = ["x86_64", "arm64"]
+    #archs = ["x86_64", "arm64"]
 
     def prebuild_arch(self, arch):
         if self.has_marker("patched"):
@@ -35,7 +35,7 @@ class LibffiRecipe(Recipe):
         shprint(python3, "_generate-darwin-source-and-headers.py", "--only-ios")
         shprint(sh.xcodebuild, self.ctx.concurrent_xcodebuild,
                 "ONLY_ACTIVE_ARCH=NO",
-                "ARCHS={}".format(arch.arch),
+                "ARCHS={}".format(arch.arch_arg()),
                 "-sdk", arch.sdk,
                 "-project", "libffi.xcodeproj",
                 "-target", "libffi-iOS",

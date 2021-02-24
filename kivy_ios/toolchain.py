@@ -9,7 +9,7 @@ This tool intend to replace all the previous tools/ in shell script.
 import argparse
 import sys
 from sys import stdout
-from os.path import join, dirname, realpath, exists, isdir, basename
+from os.path import join, dirname, realpath, exists, isdir, basename, splitext
 from os import listdir, unlink, makedirs, environ, chdir, getcwd, walk
 import sh
 import zipfile
@@ -164,6 +164,13 @@ class Arch:
             for d in self.ctx.include_dirs]
         include_dirs += ["-I{}".format(
             join(self.ctx.dist_dir, "include", self.arch))]
+        sdk = "ios-arm64" if self.sdk == "iphoneos" else "ios-arm64_x86_64-simulator"
+        lib_dirs = [
+            "-L{}/frameworks/{}.xcframework/{}".format(
+                self.ctx.dist_dir,
+                lib,
+                sdk)
+            for lib in self.ctx.lib_dirs]
 
         env = {}
         cc = sh.xcrun("-find", "-sdk", self.sdk, "clang").strip()
@@ -174,7 +181,7 @@ class Arch:
         # cross compiled projects
         flags = " ".join([
             "--sysroot", self.sysroot,
-            "-arch", self.arch,
+            "-arch", self.arch_arg(),
             "-pipe", "-no-cpp-precomp",
         ])
         cc += " " + flags
@@ -231,20 +238,30 @@ class Arch:
             self.version_min
         ] + include_dirs)
         env["LDFLAGS"] = " ".join([
-            "-arch", self.arch,
+            "-arch", self.arch_arg(),
             # "--sysroot", self.sysroot,
             "-L{}/{}".format(self.ctx.dist_dir, "lib"),
             "-L{}/usr/lib".format(self.sysroot),
             self.version_min
-        ])
+        ] + lib_dirs)
         return env
-
+    
+    def arch_arg(self):
+        return self.arch if self.arch != "ios-arm64-simulator" else "arm64"
 
 class Arch64Simulator(Arch):
     sdk = "iphonesimulator"
     arch = "x86_64"
     triple = "x86_64-apple-darwin13"
-    version_min = "-miphoneos-version-min=8.0"
+    version_min = "-miphonesimulator-version-min=8.0"
+    sysroot = sh.xcrun("--sdk", "iphonesimulator", "--show-sdk-path").strip()
+
+
+class Arch64M1Simulator(Arch):
+    sdk = "iphonesimulator"
+    arch = "ios-arm64-simulator"
+    triple = "aarch64-apple-darwin13"
+    version_min = "-miphonesimulator-version-min=8.0"
     sysroot = sh.xcrun("--sdk", "iphonesimulator", "--show-sdk-path").strip()
 
 
@@ -315,6 +332,7 @@ class Context:
 
     def __init__(self):
         self.include_dirs = []
+        self.lib_dirs = []
 
         ok = True
 
@@ -355,6 +373,7 @@ class Context:
         self.include_dir = "{}/dist/include".format(initial_working_directory)
         self.archs = (
             Arch64Simulator(self),
+            Arch64M1Simulator(self),
             Arch64IOS(self))
 
         # path to some tools
@@ -643,6 +662,10 @@ class Recipe:
         if include_dir:
             logger.info("Include dir added: {}".format(include_dir))
             self.ctx.include_dirs.append(include_dir)
+        libs = [self.library] if self.library else []
+        libs += self.libraries if self.libraries else []
+        if libs:
+            self.ctx.lib_dirs += [splitext(basename(lib))[0] for lib in libs]
 
     def get_recipe_env(self, arch=None):
         """Return the env specialized for the recipe
@@ -794,20 +817,12 @@ class Recipe:
 
         name = self.name
         if self.library:
-            logger.info("Create lipo library for {}".format(name))
-            if not name.startswith("lib"):
-                name = "lib{}".format(name)
-            static_fn = join(self.ctx.dist_dir, "lib", "{}.a".format(name))
-            ensure_dir(dirname(static_fn))
-            logger.info("Lipo {} to {}".format(self.name, static_fn))
-            self.make_lipo(static_fn)
+            logger.info("Create XCFramework for {}".format(name))
+            self.make_xcframework(name)
         if self.libraries:
-            logger.info("Create multiple lipo for {}".format(name))
+            logger.info("Create multiple XCFramework for {}".format(name))
             for library in self.libraries:
-                static_fn = join(self.ctx.dist_dir, "lib", basename(library))
-                ensure_dir(dirname(static_fn))
-                logger.info("  - Lipo-ize {}".format(library))
-                self.make_lipo(static_fn, library)
+                self.make_xcframework(splitext(basename(library))[0], library)
         logger.info("Install include files for {}".format(self.name))
         self.install_include()
         logger.info("Install frameworks for {}".format(self.name))
@@ -851,18 +866,48 @@ class Recipe:
         logger.debug("New State: {} at {}".format(key, now_str))
 
     @cache_execution
-    def make_lipo(self, filename, library=None):
+    def make_lipo(self, filename, archs, library=None):
         if library is None:
             library = self.library
         if not library:
             return
         args = []
-        for arch in self.filtered_archs:
+        for arch in archs:
             library_fn = library.format(arch=arch)
             args += [
-                "-arch", arch.arch,
+                "-arch", arch.arch_arg(),
                 join(self.get_build_dir(arch.arch), library_fn)]
         shprint(sh.lipo, "-create", "-output", filename, *args)
+
+    @cache_execution
+    def make_xcframework(self, name, library=None):
+        if library is None:
+            library = self.library
+        if not library:
+            return
+        archs = self.filtered_archs
+        args = []
+        for sdk in set(arch.sdk for arch in archs):
+            sdk_archs = [arch for arch in archs if arch.sdk == sdk]
+            if len(sdk_archs) == 1:
+                arch = sdk_archs[0]
+                library_fn = library.format(arch=arch)
+                args += [
+                    "-library",
+                    join(self.get_build_dir(arch.arch), library_fn)]
+                continue
+            if not name.startswith("lib"):
+                name = "lib{}".format(name)
+            static_fn = join(self.ctx.build_dir, self.name, sdk, "{}.a".format(name))
+            ensure_dir(dirname(static_fn))
+            logger.info("Lipo {} to {}".format(self.name, static_fn))
+            self.make_lipo(static_fn, sdk_archs, library)
+            args += [
+                "-library",
+                static_fn]
+        filename = join(self.ctx.dist_dir, "frameworks", "{}.xcframework".format(name))
+        shutil.rmtree(filename, ignore_errors=True)
+        shprint(sh.xcodebuild, "-create-xcframework", "-output", filename, *args)
 
     @cache_execution
     def install_frameworks(self):
@@ -920,7 +965,7 @@ class Recipe:
                 dest_name = None
                 if isinstance(include_dir, (list, tuple)):
                     include_dir, dest_name = include_dir
-                include_dir = include_dir.format(arch=arch, ctx=self.ctx)
+                include_dir = include_dir.format(arch=arch, ctx=self.ctx, arch_arg=arch.arch_arg())
                 src_dir = join(build_dir, include_dir)
                 if dest_name is None:
                     dest_name = basename(src_dir)

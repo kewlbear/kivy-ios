@@ -18,7 +18,7 @@ class OpensslRecipe(Recipe):
 
     def build_arch(self, arch):
         build_env = arch.get_env()
-        target = arch_mapper[arch.arch]
+        target = arch_mapper[arch.arch_arg()]
         shprint(sh.env, _env=build_env)
         sh.perl(join(self.build_dir, "Configure"),
                 target,
