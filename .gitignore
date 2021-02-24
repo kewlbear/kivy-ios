@@ -17,7 +17,7 @@ src/ios/build/
 src/ios/iosbuild/
 src/ios/ios.c
 *.DS_Store*
-*-ios/
+#*-ios/
 __pycache__
 .tox
 venv
