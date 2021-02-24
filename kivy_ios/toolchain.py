@@ -1111,7 +1111,8 @@ class CythonRecipe(PythonRecipe):
         env["CUSTOMIZED_OSX_COMPILER"] = 'True'
         env["LDSHARED"] = join(self.ctx.root_dir, "tools", "liblink")
         env["ARM_LD"] = env["LD"]
-        env["ARCH"] = arch.arch
+        env["ARCH"] = arch.arch_arg()
+        env["KIVY_MIN_VERSION_FLAG"] = '-ios_version_min' if arch.sdk == "iphoneos" else '-ios_simulator_version_min'
         return env
 
     def build_arch(self, arch):
