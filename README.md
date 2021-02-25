@@ -1,3 +1,5 @@
+### This branch has modifications to build .xcframework supporting native arm64 iOS simulators on M1 macs.
+
 # Kivy for iOS
 
 [![kivy-ios](https://github.com/kivy/kivy-ios/workflows/kivy-ios/badge.svg)](https://github.com/kivy/kivy-ios/actions?query=workflow%3Akivy-ios)
