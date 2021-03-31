@@ -126,7 +126,7 @@ class Python3Recipe(Recipe):
                     {}".format(sh.Command(self.ctx.hostpython)),
                 _env=build_env)
         self.apply_patch("ctypes_duplicate.patch")
-        shprint(sh.make, self.ctx.concurrent_make)
+        shprint(sh.make, self.ctx.concurrent_make, "CFLAGS={} -fembed-bitcode".format(build_env["CFLAGS"]))
 
     def install(self):
         arch = list(self.filtered_archs)[0]

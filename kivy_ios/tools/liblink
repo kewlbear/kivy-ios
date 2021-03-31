@@ -80,6 +80,9 @@ print('Liblink redirect linking with', objects)
 ld = environ.get('ARM_LD')
 arch = environ.get('ARCH', 'arm64')
 min_version_flag = environ.get('KIVY_MIN_VERSION_FLAG', '-ios_version_min')
-call = [ld, '-r', '-o', output + '.o', min_version_flag, '8.0', '-arch', arch] + objects
+call = [ld, '-r', '-o', output + '.o', min_version_flag, '8.0', '-arch', arch]
+if min_version_flag == "-ios_version_min":
+    call += ["-bitcode_bundle"]
+call += objects
 print("Linking: {}".format(" ".join(call)))
 subprocess.call(call)

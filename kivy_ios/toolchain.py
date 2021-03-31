@@ -164,7 +164,7 @@ class Arch:
             for d in self.ctx.include_dirs]
         include_dirs += ["-I{}".format(
             join(self.ctx.dist_dir, "include", self.arch))]
-        sdk = "ios-arm64" if self.sdk == "iphoneos" else "ios-arm64_x86_64-simulator"
+        sdk = "ios-arm64" if self.sdk == "iphoneos" else "ios-x86_64-simulator"
         lib_dirs = [
             "-L{}/frameworks/{}.xcframework/{}".format(
                 self.ctx.dist_dir,
@@ -230,6 +230,8 @@ class Arch:
         env["AR"] = sh.xcrun("-find", "-sdk", self.sdk, "ar").strip()
         env["LD"] = sh.xcrun("-find", "-sdk", self.sdk, "ld").strip()
         env["OTHER_CFLAGS"] = " ".join(include_dirs)
+        if self.sdk == "iphoneos":
+            env["OTHER_CFLAGS"] += " -fembed-bitcode" 
         env["OTHER_LDFLAGS"] = " ".join([
             "-L{}/{}".format(self.ctx.dist_dir, "lib"),
         ])
@@ -373,7 +375,7 @@ class Context:
         self.include_dir = "{}/dist/include".format(initial_working_directory)
         self.archs = (
             Arch64Simulator(self),
-            Arch64M1Simulator(self),
+            # Arch64M1Simulator(self),
             Arch64IOS(self))
 
         # path to some tools
@@ -1117,6 +1119,7 @@ class CythonRecipe(PythonRecipe):
 
     def build_arch(self, arch):
         build_env = self.get_recipe_env(arch)
+        build_env["CFLAGS"] += " " + build_env["OTHER_CFLAGS"]
         hostpython = sh.Command(self.ctx.hostpython)
         if self.pre_build_ext:
             with suppress(Exception):
