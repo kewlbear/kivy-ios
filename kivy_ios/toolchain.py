@@ -164,7 +164,7 @@ class Arch:
             for d in self.ctx.include_dirs]
         include_dirs += ["-I{}".format(
             join(self.ctx.dist_dir, "include", self.arch))]
-        sdk = "ios-arm64" if self.sdk == "iphoneos" else "ios-x86_64-simulator"
+        sdk = "ios-arm64" if self.sdk == "iphoneos" else "ios-arm64_x86_64-simulator"
         lib_dirs = [
             "-L{}/frameworks/{}.xcframework/{}".format(
                 self.ctx.dist_dir,
@@ -375,7 +375,7 @@ class Context:
         self.include_dir = "{}/dist/include".format(initial_working_directory)
         self.archs = (
             Arch64Simulator(self),
-            # Arch64M1Simulator(self),
+            Arch64M1Simulator(self),
             Arch64IOS(self))
 
         # path to some tools
@@ -946,7 +946,7 @@ class Recipe:
         if not self.include_dir:
             return
         if self.include_per_arch:
-            archs = self.ctx.archs
+            archs = self.filtered_archs
         else:
             archs = self.filtered_archs[:1]
 

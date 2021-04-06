@@ -1,6 +1,6 @@
 from kivy_ios.toolchain import Recipe, shprint
 import sh
-from os.path import exists
+from os.path import exists, join
 
 
 class LibffiRecipe(Recipe):
@@ -10,7 +10,7 @@ class LibffiRecipe(Recipe):
     include_per_arch = True
     include_dir = "build_{arch.sdk}-{arch_arg}/include"
     include_name = "ffi"
-    #archs = ["x86_64", "arm64"]
+    archs = ["x86_64", "arm64"]
 
     def prebuild_arch(self, arch):
         if self.has_marker("patched"):
@@ -35,12 +35,20 @@ class LibffiRecipe(Recipe):
         shprint(python3, "_generate-darwin-source-and-headers.py", "--only-ios")
         shprint(sh.xcodebuild, self.ctx.concurrent_xcodebuild,
                 "ONLY_ACTIVE_ARCH=NO",
-                "ARCHS={}".format(arch.arch_arg()),
+                "ARCHS={}".format("x86_64 arm64" if arch.arch == "x86_64" else arch.arch),
                 "BITCODE_GENERATION_MODE=bitcode",
                 "-sdk", arch.sdk,
                 "-project", "libffi.xcodeproj",
                 "-target", "libffi-iOS",
                 "-configuration", "Release")
 
+    def install_include(self):
+        super().install_include()
+
+        include_name = self.include_name or self.name
+        src_dir = join(self.ctx.include_dir, "x86_64", include_name)
+        dest_dir = join(self.ctx.include_dir, "ios-arm64-simulator")
+        shprint(sh.rm, "-rf", join(dest_dir, include_name))
+        shprint(sh.ln, "-s", src_dir, dest_dir)
 
 recipe = LibffiRecipe()
